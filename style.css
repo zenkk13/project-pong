@@ -1,0 +1,12 @@
+html, body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #666666;
+}
+
+canvas {
+  display: none; /* Ocultar o canvas inicialmente */
+}
