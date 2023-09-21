@@ -34,6 +34,15 @@ let velocidadeRaqueteRight;
 // Colisão Raquete
 let collideBolaRaquete = false;
 
+// Variável para controlar a probabilidade de erro do oponente
+let chanceDeErroOponente = 0.5; // Valor inicial de 50% de chance de erro
+
+// Variável para controlar a suavidade do movimento da raquete do oponente
+let suavidadeMovimentoOponente = 0.1; // Valor de suavidade (0.1 = suave, 1 = rápido)
+
+// Variável para armazenar a posição alvo da raquete do oponente
+let alvoRaqueteOponente = gameHeight / 2 - raqueteAltura / 2;
+
 // Pontos do placar
 let pontosLeft = 0;
 let pontosRight = 0;
@@ -41,10 +50,6 @@ let pontosRight = 0;
 // Sons do Jogo
 let pontoSom;
 let raqueteTouchSom;
-
-// Variáveis específicas do modo multiplayer
-let chanceDeErrar = 0;
-let bugDelta = 5;
 
 function preload() {
   pontoSom = loadSound("soundtrack/ponto.mp3");
@@ -86,6 +91,7 @@ function draw() {
   background(0);
   if (singleplayerGame) {
     singleplayerMostrarBola();
+    verificarColisaoBolaRaquete();
     singleplayerEixoBola();
     singleplayerColisaoBola();
     singleplayerRaqueteMovimentoLeft();
@@ -97,10 +103,10 @@ function draw() {
     // Biblioteca do p5
     singleplayerLibraryCollide2d(raqueteEixoXLeft, raqueteEixoYLeft);
     singleplayerLibraryCollide2d(raqueteEixoXRight, raqueteEixoYRight);
-    calculaChanceDeErrar();
     // Placar do jogo
     singleplayerPlacarPong();
     singleplayerMarcarPontos();
+    
   } else if (multiplayerGame) {
     multiplayerMostrarBola();
     multiplayerEixoBola();
@@ -161,6 +167,44 @@ function singleplayerColisaoBola() {
   }
 }
 
+// Função para verificar colisão precisa entre a bola e a raquete
+function verificarColisaoBolaRaquete() {
+  let collideBolaRaqueteLeft = false;
+  let collideBolaRaqueteRight = false;
+
+  const trajetoriaX = bolaEixoX + velocidadeEixoX;
+  const trajetoriaY = bolaEixoY + velocidadeEixoY;
+
+  // Verificar se a trajetória da bola intercepta a área da raquete direita
+  if (
+    trajetoriaX + raioBola > raqueteEixoXRight &&
+    trajetoriaY > raqueteEixoYRight &&
+    trajetoriaY < raqueteEixoYRight + raqueteAltura
+  ) {
+    // Ajustar a posição da bola para evitar a colisão
+    bolaEixoX = raqueteEixoXRight - raioBola;
+    // Inverter a velocidade da bola horizontalmente
+    velocidadeEixoX *= -1;
+    collideBolaRaqueteRight = true;
+  }
+
+  // Verificar se a trajetória da bola intercepta a área da raquete esquerda
+  if (
+    trajetoriaX - raioBola < raqueteEixoXLeft + raqueteLargura &&
+    trajetoriaY > raqueteEixoYLeft &&
+    trajetoriaY < raqueteEixoYLeft + raqueteAltura
+  ) {
+    // Ajustar a posição da bola para evitar a colisão
+    bolaEixoX = raqueteEixoXLeft + raqueteLargura + raioBola;
+    // Inverter a velocidade da bola horizontalmente
+    velocidadeEixoX *= -1;
+    collideBolaRaqueteLeft = true;
+  }
+
+  // Defina a variável global com base nas colisões individuais
+  collideBolaRaquete = collideBolaRaqueteLeft || collideBolaRaqueteRight;
+}
+
 // Função do tamanho da raquete
 function singleplayerRaqueteShape(x, y) {
   rect(x, y, raqueteLargura, raqueteAltura);
@@ -181,14 +225,31 @@ function singleplayerRaqueteMovimentoLeft() {
 
 // Função de movimentação da raquete do lado direito no modo singleplayer
 function singleplayerRaqueteMovimentoRight() {
-  velocidadeRaqueteRight =
-    bolaEixoY - raqueteEixoYRight - raqueteAltura / 2 - 50;
-    raqueteEixoYRight += velocidadeRaqueteRight + chanceDeErrar;
-    calculaChanceDeErrar();
+  const diferencaDePontos = pontosRight - pontosLeft;
+  chanceDeErroOponente = map(diferencaDePontos, -5, 5, 0.1, 0.9);
+  chanceDeErroOponente = constrain(chanceDeErroOponente, 0.1, 0.9);
+  const randomNum = random();
 
-  // Limite da raquete do lado esquerdo
-  raqueteEixoYRight = constrain(raqueteEixoYRight, 0, 500);
+  if (randomNum < chanceDeErroOponente) {
+    // Erro: o oponente comete um erro aleatório
+    const movimentoAleatorio = floor(random(-3, 4)); // Movimento aleatório entre -3 e 3
+    alvoRaqueteOponente += movimentoAleatorio;
+  } else {
+    // Movimento normal em direção à posição alvo
+    const alvoRaqueteOponente = bolaEixoY - raqueteAltura / 2;
+    const erro = alvoRaqueteOponente - raqueteEixoYRight;
+
+    // Ajuste a velocidade desejada para controlar a velocidade da raquete do oponente
+    const velocidadeDesejada = 2; // Ajuste o valor conforme necessário
+
+    raqueteEixoYRight += erro * suavidadeMovimentoOponente * velocidadeDesejada;
+  }
+
+  // Limita a posição da raquete do oponente dentro da tela
+  raqueteEixoYRight = constrain(raqueteEixoYRight, 0, gameHeight - raqueteAltura);
 }
+
+
 
 // Função de colisão entre a bola e a raquete - Biblioteca
 function singleplayerLibraryCollide2d(x, y) {
@@ -203,29 +264,7 @@ function singleplayerLibraryCollide2d(x, y) {
   );
   if (collideBolaRaquete) {
     velocidadeEixoX *= -1;
-    chanceDeErrar += bugDelta;
     raqueteTouchSom.play();
-  }
-}
-
-// Função para calcular a chance de errar no modo singleplayer
-function calculaChanceDeErrar() {
-  if (pontosLeft >= pontosRight) {
-    // Quando você estiver em desvantagem (pontosDoOponente é maior ou igual a meusPontos)
-    if (chanceDeErrar >= 95) {
-      chanceDeErrar = 95; // Limite superior para 5% de chance de acertar (95% de chance de errar)
-    }
-    if (chanceDeErrar <= 5) {
-      chanceDeErrar = 5; // Limite inferior para 95% de chance de acertar (5% de chance de errar)
-    }
-  } else {
-    // Quando o jogador esquerdo estiver na vantagem (mais pontos que o jogador direito)
-    if (chanceDeErrar >= 20) {
-      chanceDeErrar = 20; // Limite superior para 80% de chance de acertar (20% de chance de errar)
-    }
-    if (chanceDeErrar <= 80) {
-      chanceDeErrar = 80; // Limite inferior para 20% de chance de acertar (80% de chance de errar)
-    }
   }
 }
 
@@ -264,15 +303,30 @@ function singleplayerMarcarPontos() {
   if (limiteDireito) {
     pontosLeft += 1;
     pontoSom.play();
-    bugDelta *= 1;
-
+    ajustarChanceDeErroOponente();
   } 
   if (limiteEsquerdo) {
     pontosRight += 1;
     pontoSom.play();
-    chanceDeErrar = 0;
+    ajustarChanceDeErroOponente();
   }
 }
+
+function ajustarChanceDeErroOponente() {
+  const diferencaDePontos = pontosRight - pontosLeft;
+
+  if (diferencaDePontos > pontosLeft) {
+    // Se você estiver ganhando, diminuir a probabilidade de erro do oponente (ele acerta mais)
+    chanceDeErroOponente = 0.1; // Alterado para 10%
+  } else if (diferencaDePontos < pontosRight) {
+    // Se você estiver perdendo, aumentar a probabilidade de erro do oponente (ele erra mais)
+    chanceDeErroOponente = 0.8; // Alterado para 80%
+  } else {
+    // Condição padrão (equilibrada)
+    chanceDeErroOponente = 0.5;
+  }
+}
+
 
 ///////////////// MULTIPLAYER /////////////////
 
@@ -342,7 +396,6 @@ function multiplayerLibraryCollide2d(x, y) {
   );
   if (collideBolaRaquete) {
     velocidadeEixoX *= -1;
-    chanceDeErrar += bugDelta;
     raqueteTouchSom.play();
   }
 }
@@ -381,12 +434,10 @@ function multiplayerMarcarPontos() {
   if (limiteDireito) {
     pontosLeft += 1;
     pontoSom.play();
-    bugDelta *= 1;
 
   } 
   if (limiteEsquerdo) {
     pontosRight += 1;
     pontoSom.play();
-    chanceDeErrar = 0;
   }
 }
